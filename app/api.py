@@ -40,3 +40,10 @@ def cancel(order_id):
     with connect() as conn:
         orders.cancel(conn, order_id)
     return jsonify({"id": order_id, "status": "CANCELLED"})
+
+
+@app.post("/orders/<int:order_id>/refund")
+def refund(order_id):
+    with connect() as conn:
+        orders.refund(conn, order_id)
+    return jsonify({"id": order_id, "status": "REFUNDED"})
