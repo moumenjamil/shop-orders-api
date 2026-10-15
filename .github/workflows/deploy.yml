@@ -1,0 +1,56 @@
+# The shop team's CI/CD: every push to main and every PR commit is
+# deployed to the "shop-ci" environment, and GitHub is told the commit is
+# live (a GitHub deployment with status "success"), as any app's CI does.
+# Assertix waits for that before it runs a PR's tests.
+#
+# Lab setup: the service is not hosted anywhere, so the deploy step is a
+# stand-in; the GitHub deployment and its statuses are real.
+name: Deploy to shop-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.COMMIT }}
+
+      - name: Tell GitHub a deployment of this commit started
+        id: gh_deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(jq -n --arg ref "$COMMIT" \
+                 '{ref:$ref, environment:"shop-ci", auto_merge:false, required_contexts:[], description:"shop-ci deploy"}' \
+               | gh api "repos/${{ github.repository }}/deployments" --input - --jq .id)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          gh api "repos/${{ github.repository }}/deployments/$id/statuses" -f state=in_progress >/dev/null
+
+      - name: Deploy (lab stand-in)
+        run: |
+          python -m py_compile app/*.py
+          echo "would apply migrations/ and roll out $COMMIT to shop-ci"
+
+      - name: Tell GitHub the commit is live
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${{ github.repository }}/deployments/${{ steps.gh_deploy.outputs.id }}/statuses" -f state=success -f environment=shop-ci >/dev/null
+
+      - name: Tell GitHub the deploy failed
+        if: failure() && steps.gh_deploy.outputs.id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${{ github.repository }}/deployments/${{ steps.gh_deploy.outputs.id }}/statuses" -f state=failure >/dev/null
