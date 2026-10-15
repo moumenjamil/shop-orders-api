@@ -16,9 +16,12 @@ def connect():
 @app.post("/orders")
 def create():
     body = request.get_json()
+    if body.get("amount", 0) <= 0:
+        return jsonify({"error": "amount must be positive"}), 400
+    return_body = {"id": body["id"], "status": "CREATED"}
     with connect() as conn:
         orders.create_order(conn, body["id"], body["customerId"], body["amount"])
-    return jsonify({"id": body["id"], "status": "CREATED"}), 201
+    return jsonify(return_body), 201
 
 
 @app.post("/orders/<int:order_id>/pay")
