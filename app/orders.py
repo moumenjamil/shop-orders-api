@@ -7,14 +7,16 @@ class OrderStatus(str, Enum):
     PAID = "PAID"
     SHIPPED = "SHIPPED"
     CANCELLED = "CANCELLED"
+    REFUNDED = "REFUNDED"
 
 
 # Which status an order may move to from each status.
 NEXT = {
     OrderStatus.CREATED: {OrderStatus.PAID, OrderStatus.CANCELLED},
     OrderStatus.PAID: {OrderStatus.SHIPPED, OrderStatus.CANCELLED},
-    OrderStatus.SHIPPED: set(),
+    OrderStatus.SHIPPED: {OrderStatus.REFUNDED},
     OrderStatus.CANCELLED: set(),
+    OrderStatus.REFUNDED: set(),
 }
 
 
@@ -36,6 +38,11 @@ def ship(conn, order_id):
 
 def cancel(conn, order_id):
     _move(conn, order_id, OrderStatus.CANCELLED)
+
+
+def refund(conn, order_id):
+    """A shipped order the customer sent back: the money goes back to them."""
+    _move(conn, order_id, OrderStatus.REFUNDED)
 
 
 def _move(conn, order_id, to, payment_id=None):
